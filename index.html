@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Flick-Steno · Webcam Hand Trainer (no EMG)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    /* EXACT portfolio tokens (styles.css :root) */
+    --bg:#fbf1e9; --bg-soft:#f4e7da; --panel:#ffffff; --panel-2:#f4e7da; --border:#e7ded2;
+    --txt:#1f1b16; --dim:#6b625a; --muted-dim:#9a9087;
+    --accent:#ff5d3b; --accent-strong:#ec4520; --accent-2:#0e7f86; --accent-soft:#ffe7df; --accent-3-soft:#e2f0f0;
+    --good:#0e7f86; --bad:#ff5d3b; --warn:#bf8a2e;
+    --radius:18px;
+    --shadow-sm:0 2px 4px rgba(31,27,22,.05),0 4px 12px rgba(31,27,22,.05);
+    --shadow-md:0 4px 10px rgba(31,27,22,.06),0 12px 28px rgba(31,27,22,.07);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+  h1,h2,h3,.bigsound,.colgrid{font-family:"Fraunces",serif;}
+  .topbar{display:flex;justify-content:flex-end;align-items:center;
+    padding:12px 16px 0;background:transparent}
+  .wrap{display:flex;gap:16px;padding:16px;flex-wrap:wrap;align-items:flex-start}
+  .stage{position:relative;width:640px;max-width:96vw}
+  .stage video,.stage canvas{position:absolute;top:0;left:0;width:100%;border-radius:12px}
+  .stage video{transform:scaleX(-1)} /* mirror for natural feel */
+  .stage .ph{width:100%;aspect-ratio:4/3;border-radius:16px;
+    background:#14110e;border:1px solid var(--border)}
+  #overlay{pointer-events:none}
+  .side{flex:1;min-width:300px;display:flex;flex-direction:column;gap:14px}
+  .card{background:var(--panel);border:1px solid var(--border);
+    border-radius:var(--radius);padding:16px 18px;
+    box-shadow:var(--shadow-sm)}
+  .card h2{margin:0 0 8px;font-size:12px;color:var(--accent-2);
+    text-transform:uppercase;letter-spacing:.08em;font-weight:600;font-family:"Inter",sans-serif;}
+  .btn{background:#fff;border:1px solid var(--border);color:var(--txt);
+    padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;
+    font-family:"Inter",sans-serif;}
+  .btn:hover{border-color:var(--accent);color:var(--accent)}
+  .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .btn.primary:hover{background:#e04d2e;border-color:#e04d2e;color:#fff}
+  .btn.warn{background:var(--warn);color:#fff;border-color:var(--warn)}
+  .btn.warn:hover{background:#a6761e;border-color:#a6761e;color:#fff}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  /* PRMI column display */
+  .chordbox{display:flex;gap:24px;align-items:center;justify-content:center;
+    padding:8px 0}
+  .colgrid{display:grid;grid-template-columns:auto auto;gap:2px 10px;
+    font-size:30px;line-height:1.1}
+  .colgrid .lab{color:var(--dim);font-size:18px;align-self:center}
+  .bit{width:30px;text-align:center;border-radius:6px}
+  .bit.on{color:var(--accent)}
+  .bit.off{color:#dcc9b4}
+  .bigsound{font-size:54px;font-weight:700;text-align:center;min-height:64px}
+  .meta{font-size:12px;color:var(--dim);text-align:center}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  td,th{padding:3px 6px;border-bottom:1px solid var(--border);text-align:left}
+  .fingrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
+  .fingrid .f{padding:6px 4px;border-radius:8px;border:1px solid var(--border);font-size:13px}
+  .f.curled{background:rgba(255,93,59,.13);border-color:var(--accent)}
+  .f.ext{background:rgba(14,127,134,.10);border-color:var(--accent-2)}
+  .f .v{font-size:11px;color:var(--dim)}
+  #status{font-size:13px;color:var(--warn)}
+  .stat{display:flex;justify-content:space-between;font-size:13px;padding:2px 0}
+  .stat b{color:var(--accent)}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;
+    background:var(--panel-2);border:1px solid var(--border);color:var(--dim)}
+  .hint{font-size:12px;color:var(--dim);line-height:1.5}
+  kbd{background:var(--panel-2);border:1px solid var(--border);border-radius:4px;
+    padding:0 5px;font-size:11px}
+  /* debug-toggle pill */
+  #dbgToggle{
+    background:transparent;border:1px solid var(--border);
+    color:var(--dim);padding:3px 12px;border-radius:999px;
+    font-size:12px;cursor:pointer;font-family:"Inter",sans-serif;font-weight:500}
+  #dbgToggle:hover{border-color:var(--accent);color:var(--accent)}
+  #dbgToggle.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  /* progressive disclosure */
+  .debug-only{display:none}
+  html.debug .debug-only{display:block}
+  html.debug .row.debug-only,html.debug span.debug-only{display:inline-flex}
+  /* guide card */
+  .card.guide{background:var(--panel-2);border-color:var(--accent);border-width:2px}
+  .card.guide .hint-inline{
+    font-size:13px;color:var(--dim);text-align:center;padding:6px 0;font-style:italic}
+  /* warm edge wash echoing the portfolio blobs (static, light) */
+  body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+    background:
+      radial-gradient(460px 560px at 107% 42%, rgba(255,93,59,.10), transparent 62%),
+      radial-gradient(440px 520px at -8% 82%, rgba(14,127,134,.09), transparent 62%);}
+  /* floating controls (no top strip) */
+  #fxControls{position:fixed;right:14px;bottom:14px;z-index:60;display:flex;gap:8px;
+    flex-wrap:wrap;justify-content:flex-end;max-width:72vw}
+  .fxbtn{background:rgba(255,250,243,.92);border:1px solid var(--border);color:var(--dim);
+    padding:6px 13px;border-radius:999px;font:600 12px "Inter",sans-serif;cursor:pointer;
+    box-shadow:var(--shadow-sm);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+  .fxbtn:hover{border-color:var(--accent);color:var(--accent)}
+  .fxbtn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .fxbtn.act{display:none}
+  html.curate .fxbtn.act{display:inline-block}
+  /* curate mode: a checkbox on every card + text block */
+  .cur-cb{display:none}
+  html.curate [data-cid]{position:relative;outline:1px dashed rgba(255,93,59,.45);outline-offset:3px}
+  html.curate .cur-cb{display:grid;place-items:center;position:absolute;top:-10px;left:-10px;
+    width:20px;height:20px;border-radius:6px;background:#fff;border:1.5px solid var(--accent);
+    color:var(--accent);font:700 13px/1 "Inter",sans-serif;cursor:pointer;z-index:6;box-shadow:var(--shadow-sm)}
+  .cur-cb.on{background:var(--accent);color:#fff}
+  .cur-cb.on::after{content:"\2713"}
+  .cur-debug{display:none}
+  html.debug .cur-debug{display:block}
+  .cur-removed{display:none}
+  html.curate .debug-only,html.curate .cur-debug{display:block;opacity:.5}
+</style>
+</head>
+<body>
+
+<div id="fxControls">
+  <button class="fxbtn" id="dbgToggle">Debug</button>
+</div>
+
+<div class="wrap">
+  <!-- LEFT: camera -->
+  <div class="stage">
+    <div class="ph"></div>
+    <video id="cam" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <!-- RIGHT: panels -->
+  <div class="side">
+
+    <!-- SETUP card (always visible) -->
+    <div class="card">
+      <h2>Setup</h2>
+      <div class="row">
+        <button class="btn primary" id="startBtn">Start hand capturing</button>
+        <button class="btn" id="calGuideBtn" disabled>Recalibrate</button>
+        <button class="btn" id="exportBtn" disabled>Export data</button>
+        <button class="btn" id="drillBtn" disabled>Practice gestures</button>
+      </div>
+      <div class="row" id="sensRow" style="display:none;margin-top:10px;align-items:center;gap:10px">
+        <label style="font-size:13px;color:var(--dim)">Sensitivity
+          <input type="range" id="sensSlider" min="30" max="90" value="70" style="vertical-align:middle;width:160px;margin:0 6px">
+          <output id="sensOut">70%</output>
+        </label>
+      </div>
+      <div id="status" style="margin-top:8px">Press <b>Start</b> to begin.</div>
+    </div>
+
+    <!-- MAKE THIS GESTURE card (always visible) -->
+    <div class="card guide" id="drillCard" style="display:none">
+      <h2 id="guideTitle">Make this gesture</h2>
+      <img id="targetImg" alt="" style="display:none;width:210px;max-width:80%;margin:0 auto 6px;border-radius:14px">
+      <div class="chordbox" id="targetBox">
+        <div class="colgrid" id="targetCols"></div>
+        <div>
+          <div class="bigsound" id="targetSound">--</div>
+          <div class="meta" id="targetMeta"></div>
+        </div>
+      </div>
+      <div class="fingrid" id="fingers" style="display:none;margin-top:4px"></div>
+      <p class="hint-inline" id="guideHint">Curl the highlighted fingers together, then open your hand to commit.</p>
+      <div class="stat" id="lastRow"><span>Last</span><b id="dLast">--</b></div>
+      <div class="debug-only">
+        <div class="stat"><span>Correct</span><b id="dHits">0</b></div>
+        <div class="stat"><span>Missed</span><b id="dMiss">0</b></div>
+        <div class="stat"><span>Avg commit time</span><b id="dAvg">-- ms</b></div>
+      </div>
+    </div>
+
+    <!-- live detected chord card removed; live fingers now show in the guide card after calibration -->
+
+    <!-- DEBUG-ONLY: Parameters card -->
+    <div class="card debug-only">
+      <h2>Parameters · threshold and calibration</h2>
+      <div class="row" style="align-items:center">
+        <button class="btn" id="indepBtn" disabled>3 · Independence test (auto-tune)</button>
+        <button class="btn" id="resetBtn" disabled>Reset ranges</button>
+        <button class="btn" id="swapBtn">Swap on/off sides</button>
+      </div>
+      <div class="row" style="margin-top:8px;align-items:center;gap:14px">
+        <label style="font-size:12px;color:var(--dim)">All-finger close threshold
+          <output id="thrOut">70%</output>
+          <input type="range" id="thrSlider" min="20" max="98" value="70" style="vertical-align:middle;width:110px">
+        </label>
+        <label style="font-size:12px;color:var(--dim)">Smoothing
+          <output id="smOut">50%</output>
+          <input type="range" id="smSlider" min="0" max="90" value="50" style="vertical-align:middle;width:90px">
+        </label>
+      </div>
+    </div>
+
+    <!-- DEBUG-ONLY: ROM bars -->
+    <div class="card debug-only">
+      <h2>Finger closure · range-of-motion check</h2>
+      <div id="romBars"></div>
+      <div class="hint" style="margin-top:6px">Each bar = how far that finger traveled through its <b>own</b> range (0% open to 100% full fist). The white <b>marker</b> is its close threshold. A finger only registers when its bar passes the marker, so a neighbor half-curling (anatomical coupling) stays below and is ignored.</div>
+    </div>
+
+    <!-- log removed per request -->
+
+    <!-- metrics lab + model switcher removed per request (metric fixed to tip vertical pos) -->
+
+    <!-- thumb-vowel and alphabet sections removed per request -->
+
+
+  </div>
+</div>
+
+<script type="module">
+import { FilesetResolver, HandLandmarker }
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/vision_bundle.mjs";
+const MP_VER="0.10.35";
+
+// ---------- Flick-Steno encoding ----------
+// bit values: Index=1, Middle=2, Ring=4, Pinky=8  (matches touch_layout.py FB)
+const BIT = { I:1, M:2, R:4, P:8 };
+const FINGERS = ["I","M","R","P"]; // index, middle, ring, pinky
+// measured-optimal consonant -> chord int (design-locks 2026-06-04, flick_trainer.html)
+const CON2CHORD = {
+  "T/D":8,"N/M":1,"S/Z":4,"NG":2,"TH":3,"F/V":5,"K/G":9,
+  "R":6,"SH/CH":10,"L":12,"H":7,"W":14,"P/B":15
+};
+const CHORD2CON = {};
+for (const [c,v] of Object.entries(CON2CHORD)) CHORD2CON[v]=c;
+const BANISHED = {11:"IMP",13:"IRP"}; // brutal chords, never assigned
+
+function chordToCols(chord){ // returns array top->bottom P,R,M,I  with on/off
+  return [
+    {lab:"P", on:!!(chord&BIT.P)},
+    {lab:"R", on:!!(chord&BIT.R)},
+    {lab:"M", on:!!(chord&BIT.M)},
+    {lab:"I", on:!!(chord&BIT.I)},
+  ];
+}
+function chordName(chord){
+  if (chord===0) return {s:"--", m:"space / neutral"};
+  if (CHORD2CON[chord]) return {s:CHORD2CON[chord], m:fingerStr(chord)};
+  if (BANISHED[chord]) return {s:"x", m:"banished "+BANISHED[chord]};
+  return {s:"?", m:fingerStr(chord)+" (unassigned)"};
+}
+function fingerStr(chord){
+  return FINGERS.filter(f=>chord&BIT[f]).join("+") || "--";
+}
+
+// render a colgrid element
+function renderCols(el, chord){
+  const cols = chordToCols(chord);
+  el.innerHTML = cols.map(c=>
+    `<div class="lab">${c.lab}</div><div class="bit ${c.on?'on':'off'}">${c.on?'X':'\xb7'}</div>`
+  ).join("");
+}
+
+// (alphabet table removed per request)
+
+// ---------- geometry ----------
+function vsub(a,b){return {x:a.x-b.x,y:a.y-b.y,z:(a.z||0)-(b.z||0)};}
+function vlen(a){return Math.hypot(a.x,a.y,a.z);}
+function dist(a,b){return vlen(vsub(a,b));}
+function angleAt(a,b,c){ // angle at b in degrees, 3D (used for thumb)
+  const u=vsub(a,b), v=vsub(c,b);
+  const d=(u.x*v.x+u.y*v.y+u.z*v.z)/((vlen(u)*vlen(v))||1e-9);
+  return Math.acos(Math.max(-1,Math.min(1,d)))*180/Math.PI;
+}
+// landmark groups (MediaPipe hand): finger -> [MCP,PIP,DIP,TIP]
+const LM = {
+  I:[5,6,7,8], M:[9,10,11,12], R:[13,14,15,16], P:[17,18,19,20]
+};
+// ---- candidate curl metrics (the "metrics lab" lets you compare them live) ----
+function mPip(lms,f){ const [mcp,pip,dip]=LM[f];
+  return Math.max(0,180-angleAt(lms[mcp],lms[pip],lms[dip])); }                 // PIP flexion
+function mPipDip(lms,f){ const [mcp,pip,dip,tip]=LM[f];
+  return Math.max(0,180-angleAt(lms[mcp],lms[pip],lms[dip]))
+       + Math.max(0,180-angleAt(lms[pip],lms[dip],lms[tip])); }                 // PIP+DIP flexion
+function mMcpPipDip(lms,f){ const [mcp,pip]=LM[f];
+  return Math.max(0,180-angleAt(lms[0],lms[mcp],lms[pip])) + mPipDip(lms,f); }  // +knuckle
+function mTipMcp(lms,f){ const [mcp,pip,dip,tip]=LM[f];
+  const len=dist(lms[mcp],lms[pip])+dist(lms[pip],lms[dip])+dist(lms[dip],lms[tip]);
+  return dist(lms[tip],lms[mcp])/(len||1e-9); }                                 // BIGGER = more OPEN
+function mTipY(lms,f){ const tip=LM[f][3];
+  return lms[tip].y - lms[0].y; }                                              // naive vertical pos
+function mPalmHeight(lms,f){ // tip height above the PALM plane (wrist,indexMCP,pinkyMCP) -- direction-aware
+  const O=lms[0], A=lms[5], B=lms[17], T=lms[LM[f][3]];
+  const u={x:A.x-O.x,y:A.y-O.y,z:(A.z||0)-(O.z||0)};
+  const v={x:B.x-O.x,y:B.y-O.y,z:(B.z||0)-(O.z||0)};
+  const n={x:u.y*v.z-u.z*v.y, y:u.z*v.x-u.x*v.z, z:u.x*v.y-u.y*v.x};
+  const nl=Math.hypot(n.x,n.y,n.z)||1e-9;
+  const d={x:T.x-O.x,y:T.y-O.y,z:(T.z||0)-(O.z||0)};
+  return (d.x*n.x+d.y*n.y+d.z*n.z)/nl; }                                       // signed dist to palm
+
+// registry: key, label, fn, biggerClosed (does a bigger value mean MORE curled?), minSpan, color
+const METRICS=[
+  {key:"tipY",      label:"tip vertical pos (naive)",fn:mTipY,      biggerClosed:true,  minSpan:0.04, color:"#0e7f86"},
+];
+let activeMetricKey="tipY";
+function activeMetric(){ return METRICS.find(m=>m.key===activeMetricKey); }
+function rawMetric(lms,f){ return activeMetric().fn(lms,f); }
+function minSpan(){ return activeMetric().minSpan; }
+
+// ---------- detection: AUTO-RANGE closure + MANUAL per-finger thresholds ----------
+const cal = { raw:{}, dir:{} };
+const rng = {};                               // rng[f] = {lo,hi} seen raw values
+for (const f of FINGERS){ cal.raw[f]=null; cal.dir[f]=activeMetric().biggerClosed?+1:-1; rng[f]={lo:null,hi:null}; }
+let lastHandSize=null;
+// baked DEFAULT calibration (from Muhammed's export) — detection works on Start without recalibrating
+const DEFAULT_CALIB={ metric:"tipY", handSize:{palmWidth:0.1326,handLength:0.29}, fingers:{
+  I:{lo:-0.49424,hi:0.02096,threshold:-0.0048,dir:1},
+  M:{lo:-0.58034,hi:0.12724,threshold:0.09186,dir:1},
+  R:{lo:-0.56478,hi:0.17335,threshold:0.13644,dir:1},
+  P:{lo:-0.52869,hi:0.16180,threshold:0.12727,dir:1} } };
+function applyCalib(c){ if(!c||!c.fingers) return;
+  if(c.metric) activeMetricKey=c.metric;
+  for(const f of FINGERS){ const d=c.fingers[f]; if(!d) continue;
+    rng[f]={lo:d.lo,hi:d.hi}; if(d.threshold!=null) cal.raw[f]=d.threshold; if(d.dir!=null) cal.dir[f]=d.dir; }
+  haveOpen=true; haveFist=true; if(c.handSize) lastHandSize=c.handSize; }
+applyCalib(DEFAULT_CALIB);
+let haveOpen=false, haveFist=false;
+function updateRange(lms,f){                    // auto-track seen min/max of the ACTIVE metric
+  const v=rawMetric(lms,f); const r=rng[f];
+  r.lo=(r.lo==null)?v:Math.min(r.lo,v);
+  r.hi=(r.hi==null)?v:Math.max(r.hi,v);
+}
+function span(f){ const r=rng[f]; return (r.lo==null)?0:(r.hi-r.lo); }
+function closureToRaw(f,c){ const r=rng[f], s=r.hi-r.lo;     // closure fraction to raw value
+  return cal.dir[f]>0 ? r.lo+c*s : r.hi-c*s; }
+function closureOf(lms,f){                       // dir-aware closed-ness 0..1 (bars + coupling)
+  const v=rawMetric(lms,f); const r=rng[f];
+  if (r.lo==null || (r.hi-r.lo)<minSpan()) return 0;
+  const n = cal.dir[f]>0 ? (v-r.lo)/(r.hi-r.lo) : (r.hi-v)/(r.hi-r.lo);
+  return Math.max(0,Math.min(1,n));
+}
+let masterPct=0.70;                              // "close at" fraction set by the threshold slider
+function ensureThr(){                            // default raw threshold once range is known
+  for(const f of FINGERS)
+    if(cal.raw[f]==null && rng[f].lo!=null && span(f)>=minSpan()) cal.raw[f]=closureToRaw(f,masterPct);
+}
+function resetRanges(){
+  for(const f of FINGERS){ rng[f]={lo:null,hi:null}; curState[f]=false; cal.raw[f]=null; }
+  log("Ranges reset -- move each finger through its range again.");
+}
+const curState={I:false,M:false,R:false,P:false};   // hysteresis latch per finger
+function curledBits(lms){
+  let chord=0;
+  for (const f of FINGERS){
+    const r=rng[f], thr=cal.raw[f];
+    if(r.lo==null || thr==null) continue;
+    const v=rawMetric(lms,f), dir=cal.dir[f], band=0.05*Math.max(1e-9,(r.hi-r.lo));
+    if (curState[f]){ const off = dir>0 ? v<thr-band : v>thr+band; if(off) curState[f]=false; }
+    else            { const on  = dir>0 ? v>=thr     : v<=thr;     if(on)  curState[f]=true;  }
+    if (curState[f]) chord|=BIT[f];
+  }
+  return chord;
+}
+
+// ---------- thumb vowel (experimental) ----------
+function thumbVowel(lms){
+  // thumb tip = 4 ; index landmarks 5(knuckle),6(1st phalanx),8(tip-ward)
+  const tip=lms[4];
+  const targets=[[5,"near"],[6,"mid"],[8,"far"]];
+  let best="near", bd=1e9;
+  for (const [idx,name] of targets){
+    const d=vlen(vsub(tip,lms[idx]));
+    if (d<bd){bd=d;best=name;}
+  }
+  // up vs down: thumb extended (up) -> IP angle straight; folded -> bent
+  const ipAng=angleAt(lms[2],lms[3],lms[4]); // angle at IP
+  const vert = ipAng>150 ? "UP" : "DOWN";
+  return {pos:best, vert, label:`${vert} \xb7 ${best}`};
+}
+
+// ---------- chord commit state machine ----------
+let phase="NEUTRAL"; // NEUTRAL | ACTIVE
+let peakChord=0, peakCount=-1, lastCommitT=0;
+let onCommit = null; // callback(chord)
+function feedChord(liveChord, tNow){
+  const count = FINGERS.filter(f=>liveChord&BIT[f]).length;
+  if (phase==="NEUTRAL"){
+    if (count>=1 && (tNow-lastCommitT)>180){
+      phase="ACTIVE"; peakChord=liveChord; peakCount=count;
+    }
+  } else { // ACTIVE
+    if (count>peakCount){ peakCount=count; peakChord=liveChord; }
+    else if (count===peakCount && liveChord!==peakChord){ peakChord|=liveChord; }
+    if (count===0){ // released -> commit
+      const c=peakChord; phase="NEUTRAL"; lastCommitT=tNow;
+      peakChord=0; peakCount=-1;
+      if (onCommit && c) onCommit(c, tNow);
+    }
+  }
+}
+
+// ---------- MediaPipe setup ----------
+const video=document.getElementById("cam");
+const overlay=document.getElementById("overlay");
+const octx=overlay.getContext("2d");
+const statusEl=document.getElementById("status");
+let landmarker=null, running=false, lastVideoTime=-1;
+let lastLms=null;
+let frames=0, fpsT=performance.now();
+
+// EMA landmark smoothing (kills jitter that flips bits at the threshold).
+// SMOOTH = weight on the NEW frame; lower = smoother but laggier.
+let smLms=null, SMOOTH=0.5;
+function smoothLms(cur){
+  if(!smLms || smLms.length!==cur.length){ smLms=cur.map(p=>({x:p.x,y:p.y,z:p.z||0})); return smLms; }
+  for(let i=0;i<cur.length;i++){
+    smLms[i].x=SMOOTH*cur[i].x+(1-SMOOTH)*smLms[i].x;
+    smLms[i].y=SMOOTH*cur[i].y+(1-SMOOTH)*smLms[i].y;
+    smLms[i].z=SMOOTH*(cur[i].z||0)+(1-SMOOTH)*smLms[i].z;
+  }
+  return smLms;
+}
+
+const CONNS=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],
+  [9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+
+// ---- on-page diagnostics ----
+function log(m){ console.log("[flick]",m); }
+function fail(m){ statusEl.innerHTML="<span style='color:var(--bad)'>"+m+"</span>";
+  log("ERROR: "+m); }
+
+async function initModel(){
+  log("Loading WASM runtime...");
+  const vision=await FilesetResolver.forVisionTasks(
+    `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/wasm`);
+  log("WASM ok. Loading hand model (~7MB)...");
+  const opts=(delegate)=>({
+    baseOptions:{
+      modelAssetPath:"https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+      delegate
+    }, numHands:1, runningMode:"VIDEO"
+  });
+  try{
+    landmarker=await HandLandmarker.createFromOptions(vision, opts("GPU"));
+    log("Model ready (GPU) ok");
+  }catch(e){
+    log("GPU delegate failed ("+e.message+"), retrying on CPU...");
+    landmarker=await HandLandmarker.createFromOptions(vision, opts("CPU"));
+    log("Model ready (CPU) ok");
+  }
+}
+
+async function startCam(){
+  log("Requesting camera...");
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({
+      video:{width:640,height:480,facingMode:"user"}, audio:false});
+    video.srcObject=stream;
+    await video.play();
+    await new Promise(r=>{ if(video.videoWidth) return r();
+      video.onloadedmetadata=()=>r(); });
+    overlay.width=video.videoWidth||640;
+    overlay.height=video.videoHeight||480;
+    running=true;
+    requestAnimationFrame(loop);
+    log(`Camera live (${video.videoWidth}x${video.videoHeight}).`);
+    statusEl.textContent="Getting ready...";
+    { const sb=document.getElementById("startBtn"); sb.textContent="Stop hand capturing"; sb.classList.remove("primary"); }
+  }catch(e){
+    fail("Camera blocked. Open from localhost on the machine with the webcam, then click Allow.");
+    { const sb=document.getElementById("startBtn"); sb.textContent="Start hand capturing"; sb.classList.add("primary"); sb.disabled=false; }
+    return;
+  }
+  try{
+    if(!landmarker) await initModel();
+    enable("calGuideBtn","indepBtn","resetBtn","drillBtn","exportBtn");
+    document.getElementById("drillCard").style.display="block";
+    document.getElementById("sensRow").style.display="flex";
+    setGuide("Your hand","Curl your fingers, they light up here. Recalibrate to personalize.");
+    setGuideMode('live');
+    statusEl.textContent="";
+  }catch(e){
+    fail("Could not load the hand model. Check your connection and try again.");
+  }
+}
+
+function loop(){
+  if(!running) return;
+  const tMs=performance.now();
+  if (landmarker && video.currentTime!==lastVideoTime && video.videoWidth){
+    lastVideoTime=video.currentTime;
+    try{
+      const res=landmarker.detectForVideo(video, tMs);
+      if (res.landmarks && res.landmarks.length){
+        lastLms=smoothLms(res.landmarks[0]);   // EMA jitter smoothing
+        processHand(lastLms, tMs);
+      } else {
+        lastLms=null; smLms=null; clearOverlay(); setLive(0);
+      }
+    }catch(e){ /* transient frame errors -- keep looping */ }
+  }
+  requestAnimationFrame(loop);
+}
+
+function clearOverlay(){ octx.clearRect(0,0,overlay.width,overlay.height); }
+
+const debugOn=()=>document.documentElement.classList.contains("debug");
+function processHand(lms, tMs){
+  for (const f of FINGERS) updateRange(lms,f);   // expand seen range BEFORE thresholding
+  const live=curledBits(lms);
+  drawHand(lms, live);     // always: hand skeleton over the camera
+  feedChord(live, tMs);    // always: drives the gesture practice
+  ensureThr();             // always: keep thresholds seeded for detection
+  sampleCoupling(lms);     // cheap, only active during the independence test
+  setLive(live);           // live finger pills (the post-calibration view)
+  if(debugOn()){           // heavy debug-only panels -- skipped in simple mode
+    updateRom(lms, live);
+  }
+}
+
+// live closure% bars (the "check the finger's range of motion" view)
+function updateRom(lms, live){
+  ensureThr();
+  for(const f of FINGERS){
+    const n=Math.round(closureOf(lms,f)*100);
+    const on=!!(live&BIT[f]);
+    const bar=document.getElementById("rom_"+f);
+    const val=document.getElementById("romv_"+f);
+    const thrm=document.getElementById("romt_"+f);
+    if(!bar) continue;
+    bar.style.width=n+"%";
+    bar.style.background=on?"var(--bad)":(n>55?"var(--warn)":"var(--good)");
+    val.textContent=n+"%";
+    if(thrm && cal.raw[f]!=null && span(f)>=minSpan()){   // marker = closure-position of raw thr
+      const r=rng[f];
+      const mc = cal.dir[f]>0 ? (cal.raw[f]-r.lo)/(r.hi-r.lo) : (r.hi-cal.raw[f])/(r.hi-r.lo);
+      thrm.style.left=Math.max(0,Math.min(100,mc*100))+"%";
+    }
+    syncRawSlider(f);                                       // keep raw slider range/value in sync
+  }
+}
+
+// ---- metrics lab: rolling history of EVERY metric for the focused finger ----
+let labFinger="I";
+const LABLEN=180;
+const labHist={};
+for(const m of METRICS) labHist[m.key]=[];
+let lastLabDraw=0;
+function clearLab(){ for(const m of METRICS) labHist[m.key]=[]; }
+function feedLab(lms, tMs){
+  for(const m of METRICS){
+    const buf=labHist[m.key];
+    buf.push(m.fn(lms, labFinger));
+    if(buf.length>LABLEN) buf.shift();
+  }
+  if(tMs-lastLabDraw>60){ lastLabDraw=tMs; drawLab(); }
+}
+function drawLab(){
+  for(const m of METRICS){
+    const cv=document.getElementById("labc_"+m.key); if(!cv) continue;
+    const ctx=cv.getContext("2d"); const W=cv.width, H=cv.height;
+    ctx.clearRect(0,0,W,H);
+    const buf=labHist[m.key]; if(buf.length<2) continue;
+    let lo=Math.min(...buf), hi=Math.max(...buf); if(hi-lo<1e-9) hi=lo+1e-9;
+    const x=i=> i/(buf.length-1)*W;
+    const y=v=> H-3 - ((v-lo)/(hi-lo))*(H-6);
+    if(m.key===activeMetricKey && cal.raw[labFinger]!=null){  // dashed threshold line
+      ctx.strokeStyle="rgba(31,27,22,.4)"; ctx.lineWidth=1; ctx.setLineDash([4,3]);
+      const yy=y(cal.raw[labFinger]);
+      ctx.beginPath(); ctx.moveTo(0,yy); ctx.lineTo(W,yy); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.strokeStyle=m.color; ctx.lineWidth=2; ctx.beginPath();
+    buf.forEach((v,i)=>{ const px=x(i), py=y(v); i?ctx.lineTo(px,py):ctx.moveTo(px,py); });
+    ctx.stroke();
+    const vv=document.getElementById("labv_"+m.key);
+    if(vv) vv.textContent=`cur ${buf[buf.length-1].toFixed(2)} \xb7 seen ${lo.toFixed(2)}...${hi.toFixed(2)}`;
+  }
+}
+function buildLab(){
+  const ff=document.getElementById("labFinger");
+  ff.innerHTML=FINGERS.map(f=>`<option value="${f}">${FNAME[f]}</option>`).join("");
+  ff.value=labFinger; ff.onchange=()=>{ labFinger=ff.value; clearLab(); };
+  const am=document.getElementById("activeMetricSel");
+  am.innerHTML=METRICS.map(m=>`<option value="${m.key}">${m.label}</option>`).join("");
+  am.value=activeMetricKey; am.onchange=()=>setActiveMetric(am.value);
+  document.getElementById("labClear").onclick=clearLab;
+  document.getElementById("labMetrics").innerHTML=METRICS.map(m=>`
+    <div style="margin:7px 0">
+      <div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;flex-wrap:wrap">
+        <span style="color:${m.color};font-weight:600;min-width:0">${m.label}${m.key===activeMetricKey?' active':''}</span>
+        <span id="labv_${m.key}" style="color:var(--dim);font-size:10px;min-width:0;text-align:right;word-break:break-all">--</span>
+      </div>
+      <canvas id="labc_${m.key}" width="320" height="42" style="display:block;width:100%;height:42px;background:var(--panel-2);border-radius:6px;border:1px solid var(--border)"></canvas>
+    </div>`).join("");
+}
+function setActiveMetric(key){
+  activeMetricKey=key;
+  const am=document.getElementById("activeMetricSel"); if(am) am.value=key;
+  const dir=activeMetric().biggerClosed?+1:-1;
+  for(const f of FINGERS){ rng[f]={lo:null,hi:null}; curState[f]=false; cal.raw[f]=null; cal.dir[f]=dir; }
+  buildLab(); syncThrUI();   // refresh "active" marker + direction labels
+  log("Active metric -> "+activeMetric().label+" (range+threshold reset; move fingers to refill)");
+}
+
+function drawHand(lms, live){
+  clearOverlay();
+  const W=overlay.width,H=overlay.height;
+  const mx=p=>(1-p.x)*W, my=p=>p.y*H; // mirror x to match mirrored video
+  octx.lineWidth=3; octx.strokeStyle="rgba(14,127,134,.7)";
+  for (const [a,b] of CONNS){
+    octx.beginPath(); octx.moveTo(mx(lms[a]),my(lms[a]));
+    octx.lineTo(mx(lms[b]),my(lms[b])); octx.stroke();
+  }
+  // color fingertips by curl
+  const tipOf={I:8,M:12,R:16,P:20};
+  for (const f of FINGERS){
+    const curled=!!(live&BIT[f]); const p=lms[tipOf[f]];
+    octx.fillStyle=curled?"#ff5d3b":"#0e7f86";
+    octx.beginPath(); octx.arc(mx(p),my(p),8,0,7); octx.fill();
+  }
+  // thumb tip
+  octx.fillStyle="#bf8a2e";
+  octx.beginPath(); octx.arc(mx(lms[4]),my(lms[4]),8,0,7); octx.fill();
+  // other joints
+  octx.fillStyle="rgba(251,241,233,.9)";
+  for (let i=0;i<21;i++){ const p=lms[i];
+    octx.beginPath(); octx.arc(mx(p),my(p),3,0,7); octx.fill(); }
+}
+
+let lastLiveChord=-1;
+function setLive(chord, note){
+  const fg=document.getElementById("fingers"); if(!fg) return;
+  if(chord===lastLiveChord) return; lastLiveChord=chord;   // only rebuild on change (cheap)
+  const names={I:"Index",M:"Middle",R:"Ring",P:"Pinky"};
+  fg.innerHTML=FINGERS.map(f=>{
+    const on=!!(chord&BIT[f]);
+    return `<div class="f ${on?'curled':'ext'}">${names[f]}<div class="v">${on?'curl':'open'}</div></div>`;
+  }).join("");
+}
+function setGuideMode(mode){ // 'calib' (show pose) | 'live' (show your fingers) | 'drill'
+  const img=document.getElementById("targetImg"), box=document.getElementById("targetBox");
+  const fg=document.getElementById("fingers"), last=document.getElementById("lastRow");
+  const showTarget=(mode==='calib'||mode==='drill');
+  if(img) img.style.display=showTarget?"block":"none";
+  if(box) box.style.display=showTarget?"flex":"none";
+  if(fg) fg.style.display=(mode==='live'||mode==='drill')?"grid":"none";
+  if(last) last.style.display=(mode==='drill')?"flex":"none";
+}
+
+// ---------- optional snap-calibration (range endpoints) ----------
+const FNAME={I:"Index",M:"Middle",R:"Ring",P:"Pinky"};
+function fname(f){return FNAME[f];}
+function wait(ms){return new Promise(r=>setTimeout(r,ms));}
+function snapNow(){                 // expand each finger's range to include the current pose
+  if(!lastLms){ statusEl.innerHTML="<span style='color:var(--bad)'>No hand visible -- show your hand, then press again.</span>"; return false; }
+  for (const f of FINGERS){ const v=rawMetric(lastLms,f); const r=rng[f];
+    r.lo=(r.lo==null)?v:Math.min(r.lo,v); r.hi=(r.hi==null)?v:Math.max(r.hi,v); }
+  return true;
+}
+function logROM(){
+  log(`RANGE (${activeMetric().label}) min to max:`);
+  for(const f of FINGERS){
+    const r=rng[f]; if(r.lo==null||r.hi==null) continue;
+    const s=Math.abs(r.hi-r.lo);
+    log(`  ${fname(f).padEnd(7)} ${r.lo.toFixed(2)} to ${r.hi.toFixed(2)}  (span ${s.toFixed(2)}${s<minSpan()?' small':''})`);
+  }
+}
+function maybeReady(){ enable("drillBtn"); }
+
+// ---------- guided AUTO calibration: pose sequence with figures + measurement ----------
+const CAL_POSES = [
+  {key:'open', chord:0,  img:'figures/pose-open.png',  label:'Open your hand wide'},
+  {key:'fist', chord:15, img:'figures/pose-fist.png',  label:'Make a tight fist'},
+  {key:'I',    chord:1,  img:'figures/pose-index.png', label:'Curl ONLY your index'},
+  {key:'M',    chord:2,  img:'figures/pose-middle.png',label:'Curl ONLY your middle'},
+  {key:'R',    chord:4,  img:'figures/pose-ring.png',  label:'Curl ONLY your ring'},
+  {key:'P',    chord:8,  img:'figures/pose-pinky.png', label:'Curl ONLY your pinky'},
+];
+let calibData=null, calibrating=false;
+function median(a){ if(!a||!a.length) return null; const b=a.slice().sort((x,y)=>x-y); const m=b.length>>1; return b.length%2?b[m]:(b[m-1]+b[m])/2; }
+function closureFromRaw(f,v){ const r=rng[f]; if(r.lo==null||(r.hi-r.lo)<minSpan()) return 0;
+  const n=cal.dir[f]>0?(v-r.lo)/(r.hi-r.lo):(r.hi-v)/(r.hi-r.lo); return Math.max(0,Math.min(1,n)); }
+function handSpan(lms){ if(!lms) return null;
+  return { palmWidth:+dist(lms[5],lms[17]).toFixed(4), handLength:+dist(lms[0],lms[9]).toFixed(4) }; }
+function setGuide(title,hint){ const t=document.getElementById("guideTitle"); if(t)t.textContent=title;
+  const h=document.getElementById("guideHint"); if(h)h.textContent=hint; }
+function showPose(pose,sub){
+  const img=document.getElementById("targetImg"); img.src=pose.img; img.style.display="block";
+  document.getElementById("targetSound").textContent="";
+  document.getElementById("targetMeta").textContent=sub||pose.label;
+  renderCols(document.getElementById("targetCols"), pose.chord);
+}
+
+async function waitForStable(minMs=900, stillMs=550, timeoutMs=9000){
+  const t0=performance.now(); let prev=null, stillSince=null;
+  while(performance.now()-t0 < timeoutMs){
+    if(!running) return false;
+    if(lastLms){
+      let mv=1;
+      if(prev && prev.length===lastLms.length){ mv=0; for(let i=0;i<lastLms.length;i++) mv+=Math.hypot(lastLms[i].x-prev[i].x, lastLms[i].y-prev[i].y); mv/=lastLms.length; }
+      prev=lastLms.map(p=>({x:p.x,y:p.y}));
+      if((performance.now()-t0)>=minMs && mv<0.0035){ if(stillSince==null) stillSince=performance.now(); if(performance.now()-stillSince>=stillMs) return true; }
+      else stillSince=null;
+    } else stillSince=null;
+    await wait(45);
+  }
+  return false;
+}
+async function runCalibration(){
+  if(!running || !landmarker || calibrating){
+    if(!running) statusEl.innerHTML="<span style='color:var(--bad)'>Press Start first.</span>";
+    return;
+  }
+  calibrating=true; drillOn=false;
+  disable("calGuideBtn","drillBtn","exportBtn");
+  document.getElementById("drillCard").style.display="block";
+  setGuide("Calibration","Follow each pose. It advances on its own."); setGuideMode('calib');
+  for(const f of FINGERS){ rng[f]={lo:null,hi:null}; cal.raw[f]=null; curState[f]=false; }
+  const samples={}; let handSizeAt=null;
+  for(const pose of CAL_POSES){
+    if(!running){ calibrating=false; return; }
+    showPose(pose, pose.label);
+    document.getElementById("targetMeta").textContent=pose.label+"  ·  make it, then hold still";
+    await waitForStable();                 // advance when the hand settles into the pose (not on a timer)
+    if(!running){ calibrating=false; return; }
+    document.getElementById("targetMeta").textContent=pose.label+"  ·  capturing";
+    samples[pose.key]={I:[],M:[],R:[],P:[]};
+    const t0=performance.now();
+    while(performance.now()-t0 < 500){
+      if(lastLms){ for(const f of FINGERS) samples[pose.key][f].push(rawMetric(lastLms,f)); }
+      await wait(35);
+    }
+    if(pose.key==='open' && lastLms){ handSizeAt=handSpan(lastLms); lastHandSize=handSizeAt; }
+    for(const f of FINGERS){ const v=median(samples[pose.key][f]); if(v==null) continue;
+      const r=rng[f]; r.lo=(r.lo==null)?v:Math.min(r.lo,v); r.hi=(r.hi==null)?v:Math.max(r.hi,v); }
+    await wait(300);
+  }
+  // per-finger threshold set just above adjacent-finger coupling (from the single-finger poses)
+  const symp={I:0,M:0,R:0,P:0};
+  for(const f of FINGERS){
+    for(const pose of CAL_POSES){
+      if(pose.key==='open'||pose.key==='fist'||pose.key===f) continue;
+      const arr=samples[pose.key][f]; if(!arr||!arr.length) continue;
+      const c=Math.max(...arr.map(v=>closureFromRaw(f,v))); symp[f]=Math.max(symp[f],c);
+    }
+    if(span(f)>=minSpan()) cal.raw[f]=closureToRaw(f, Math.min(0.95, Math.max(masterPct, symp[f]+0.12)));
+  }
+  syncThrUI(); logROM(); haveOpen=true; haveFist=true;
+  calibData={
+    version:1, when:new Date().toISOString(), metric:activeMetricKey,
+    handSize:handSizeAt,
+    fingers:Object.fromEntries(FINGERS.map(f=>[f,{
+      lo:+(rng[f].lo??0).toFixed(5), hi:+(rng[f].hi??0).toFixed(5), span:+span(f).toFixed(5),
+      threshold:+(cal.raw[f]??0).toFixed(5), dir:cal.dir[f],
+      coupling:+symp[f].toFixed(3), closeAtPct:+masterPct.toFixed(2)
+    }]))
+  };
+  document.getElementById("sensRow").style.display="flex";
+  enable("calGuideBtn","exportBtn","drillBtn");
+  setGuide("Your hand","Curl your fingers, they light up here. Press Practice for a drill.");
+  setGuideMode('live');
+  calibrating=false;
+  statusEl.innerHTML="<b>Calibration finished.</b>";
+}
+document.getElementById("calGuideBtn").onclick=runCalibration;
+
+function exportCalibration(){
+  const calibData={ version:1, when:new Date().toISOString(), metric:activeMetricKey, handSize:lastHandSize||null,
+    fingers:Object.fromEntries(FINGERS.map(f=>[f,{ lo:+(rng[f].lo??0).toFixed(5), hi:+(rng[f].hi??0).toFixed(5),
+      span:+span(f).toFixed(5), threshold:+(cal.raw[f]??0).toFixed(5), dir:cal.dir[f], closeAtPct:+masterPct.toFixed(2) }])) };
+  const blob=new Blob([JSON.stringify(calibData,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a"); a.href=url; a.download="flick-calibration.json"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000); log("Exported calibration JSON.");
+}
+document.getElementById("exportBtn").onclick=exportCalibration;
+
+// ---------- independence test: measure adjacent-finger coupling, auto-tune thr ----------
+let coupCap=null;  // {samples:{I:[],...}}
+function sampleCoupling(lms){
+  if(!coupCap) return;
+  for(const f of FINGERS) coupCap.samples[f].push(closureOf(lms,f));
+}
+let indepRunning=false;
+async function independenceTest(){
+  const ready=FINGERS.every(f=>rng[f].lo!=null && (rng[f].hi-rng[f].lo)>=minSpan());
+  if(!ready){ fail("Move each finger through its full range first (open hand, then fist), or press 1 then 2 to snap. Then run the test."); return; }
+  if(indepRunning) return; indepRunning=true;
+  disable("indepBtn","drillBtn");
+  const symp={I:0,M:0,R:0,P:0};
+  log("INDEPENDENCE TEST -- curl ONE finger at a time, keep the others relaxed.");
+  for(const tgt of FINGERS){
+    for(let s=3;s>=1;s--){ statusEl.innerHTML=`Get ready: curl ONLY <b>${fname(tgt)}</b> in ${s}...`; await wait(700); }
+    statusEl.innerHTML=`Now curl ONLY <b>${fname(tgt)}</b> and hold...`;
+    coupCap={samples:{I:[],M:[],R:[],P:[]}};
+    await wait(2500);
+    for(const f of FINGERS){ if(f===tgt) continue;
+      const arr=coupCap.samples[f]; const m=arr.length?Math.max(...arr):0;
+      symp[f]=Math.max(symp[f],m);
+    }
+    coupCap=null;
+    await wait(500);
+  }
+  for(const f of FINGERS){ const c=Math.min(0.97,Math.max(0.55,symp[f]+0.12)); cal.raw[f]=closureToRaw(f,c); }
+  syncThrUI();
+  log("COUPLING (max sympathetic closed-ness when finger NOT intended) + new raw threshold:");
+  for(const f of FINGERS) log(`  ${fname(f).padEnd(7)} symp ${Math.round(symp[f]*100)}%  raw thr ${cal.raw[f].toFixed(3)}`);
+  statusEl.innerHTML="Independence test done -- per-finger thresholds auto-tuned above adjacent-finger coupling. Try chords.";
+  indepRunning=false; enable("indepBtn","drillBtn");
+}
+document.getElementById("indepBtn").onclick=independenceTest;
+
+// ---------- consonant drill ----------
+const DRILL=["N/M","S/Z","T/D","NG","R","TH","F/V","SH/CH","K/G","L","H","W","P/B"];
+let drillOn=false, drillIdx=0, drillTarget=0, drillShownT=0;
+let dHits=0,dMiss=0,dTimes=[];
+function nextTarget(){
+  const c=DRILL[drillIdx % DRILL.length]; drillIdx++;
+  drillTarget=CON2CHORD[c];
+  const img=document.getElementById("targetImg");
+  if(img){ img.src='figures/chord-'+c.replace(/[\/ ]/g,'')+'.png'; img.style.display='block'; }
+  renderCols(document.getElementById("targetCols"), drillTarget);
+  document.getElementById("targetSound").textContent=c;
+  document.getElementById("targetMeta").textContent=fingerStr(drillTarget);
+  drillShownT=performance.now();
+}
+function startDrill(){
+  drillOn=true; drillIdx=0; dHits=0; dMiss=0; dTimes=[];
+  document.getElementById("drillCard").style.display="block";
+  setGuide("Make this gesture","Curl the highlighted fingers, then open your hand to commit.");
+  setGuideMode('drill');
+  const db=document.getElementById("drillBtn"); if(db) db.textContent="Stop practice";
+  updateDrillStats(); nextTarget();
+}
+function stopDrill(){ drillOn=false;
+  setGuide("Your hand","Curl your fingers, they light up here.");
+  setGuideMode('live');
+  const db=document.getElementById("drillBtn"); if(db) db.textContent="Practice gestures"; }
+function updateDrillStats(){
+  document.getElementById("dHits").textContent=dHits;
+  document.getElementById("dMiss").textContent=dMiss;
+  const avg=dTimes.length?Math.round(dTimes.reduce((a,b)=>a+b,0)/dTimes.length):null;
+  document.getElementById("dAvg").textContent=avg!=null?avg+" ms":"-- ms";
+}
+onCommit=(chord,tNow)=>{
+  if(!drillOn) return;
+  if(chord===drillTarget){
+    dHits++; dTimes.push(Math.round(tNow-drillShownT));
+    document.getElementById("dLast").innerHTML="<span style='color:var(--good)'>✓ "+fingerStr(chord)+"</span>";
+    updateDrillStats(); nextTarget();
+  } else {
+    dMiss++;
+    document.getElementById("dLast").innerHTML="<span style='color:var(--bad)'>x got "+fingerStr(chord)+" want "+fingerStr(drillTarget)+"</span>";
+    updateDrillStats();
+  }
+};
+document.getElementById("drillBtn").onclick=()=>{ if(drillOn) stopDrill(); else startDrill(); };
+
+// ---------- ui helpers ----------
+function enable(...ids){ ids.forEach(i=>{ const el=document.getElementById(i); if(el) el.disabled=false; }); }
+function disable(...ids){ ids.forEach(i=>{ const el=document.getElementById(i); if(el) el.disabled=true; }); }
+function stopCapture(){
+  running=false; calibrating=false; drillOn=false;
+  try{ if(video.srcObject){ video.srcObject.getTracks().forEach(t=>t.stop()); video.srcObject=null; } }catch(e){}
+  clearOverlay();
+  const sb=document.getElementById("startBtn"); sb.textContent="Start hand capturing"; sb.classList.add("primary"); sb.disabled=false;
+  disable("calGuideBtn","drillBtn","exportBtn");
+  statusEl.textContent="Stopped.";
+}
+document.getElementById("startBtn").onclick=()=>{ if(running){ stopCapture(); } else { startCam(); } };
+
+// closure-bars + PER-FINGER RAW threshold sliders (negative-capable) + direction flip
+function updateDirLabel(f){ const db=document.getElementById("dir_"+f);
+  if(db) db.textContent = cal.dir[f]>0 ? ">= thr" : "<= thr"; }
+function syncRawSlider(f){               // keep the raw slider's range + value matched to data
+  const sl=document.getElementById("thr_"+f); if(!sl) return;
+  const r=rng[f]; if(r.lo==null) return;
+  const s=Math.max(1e-6,r.hi-r.lo), pad=0.2*s;
+  sl.min=(r.lo-pad).toFixed(4); sl.max=(r.hi+pad).toFixed(4); sl.step=(s/200).toFixed(5);
+  if(cal.raw[f]!=null && document.activeElement!==sl) sl.value=cal.raw[f];
+  const tv=document.getElementById("thrv_"+f);
+  if(tv) tv.textContent=(cal.raw[f]==null?"--":(+cal.raw[f]).toFixed(3));
+}
+function buildRomBars(){
+  document.getElementById("romBars").innerHTML=FINGERS.map(f=>`
+   <div style="margin:6px 0 14px">
+     <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--dim)">
+       <span>${FNAME[f]} <button class="btn" id="dir_${f}" title="swap on/off side" style="padding:0 6px;font-size:10px">>= thr</button></span>
+       <span id="romv_${f}">0%</span>
+     </div>
+     <div style="position:relative;height:12px;background:var(--panel-2);border-radius:6px;border:1px solid var(--border)">
+       <div id="rom_${f}" style="height:100%;width:0%;border-radius:6px;background:var(--good)"></div>
+       <div id="romt_${f}" title="closed-at threshold" style="position:absolute;top:-3px;height:18px;width:2px;background:var(--txt);left:70%"></div>
+     </div>
+     <div style="display:flex;align-items:center;gap:6px;margin-top:3px">
+       <span style="font-size:11px;color:var(--dim)">raw thr</span>
+       <input type="range" id="thr_${f}" min="0" max="1" step="0.001" value="0.5" style="flex:1">
+       <span style="font-size:11px;color:var(--accent);min-width:48px;text-align:right" id="thrv_${f}">--</span>
+     </div>
+   </div>`).join("");
+  for(const f of FINGERS){
+    const sl=document.getElementById("thr_"+f);
+    sl.oninput=()=>{ cal.raw[f]=parseFloat(sl.value);
+      const tv=document.getElementById("thrv_"+f); if(tv) tv.textContent=cal.raw[f].toFixed(3); };
+    document.getElementById("dir_"+f).onclick=()=>{ cal.dir[f]*=-1; updateDirLabel(f);
+      log(`${fname(f)} side swapped -- closed when ${cal.dir[f]>0?'>=':'<='} thr`); };
+    updateDirLabel(f);
+  }
+}
+function syncThrUI(){   // push raw thresholds + direction labels into the UI
+  for(const f of FINGERS){ syncRawSlider(f); updateDirLabel(f); }
+}
+buildRomBars();
+
+// master threshold slider -- sets ALL fingers to the same closed-ness % of their range
+const thrSlider=document.getElementById("thrSlider"), thrOut=document.getElementById("thrOut");
+thrSlider.oninput=()=>{ const v=+thrSlider.value; thrOut.textContent=v+"%"; masterPct=v/100;
+  for(const f of FINGERS){ cal.raw[f] = span(f)>=minSpan() ? closureToRaw(f, masterPct) : null; }
+  syncThrUI(); const ss=document.getElementById("sensSlider"); if(ss){ ss.value=v; const so=document.getElementById("sensOut"); if(so) so.textContent=v+"%"; } };
+
+// simple-view sensitivity slider (mirrors the debug threshold; lets you tune detection without Debug)
+const sensSlider=document.getElementById("sensSlider"), sensOut=document.getElementById("sensOut");
+if(sensSlider) sensSlider.oninput=()=>{ const v=+sensSlider.value; sensOut.textContent=v+"%"; masterPct=v/100;
+  for(const f of FINGERS){ cal.raw[f] = span(f)>=minSpan() ? closureToRaw(f, masterPct) : null; }
+  syncThrUI(); const thr=document.getElementById("thrSlider"); if(thr){ thr.value=v; const to=document.getElementById("thrOut"); if(to) to.textContent=v+"%"; } };
+
+// global swap: flip on/off side for ALL fingers at once
+document.getElementById("swapBtn").onclick=()=>{ for(const f of FINGERS) cal.dir[f]*=-1; syncThrUI();
+  log("Swapped on/off sides for ALL fingers"); };
+
+// smoothing slider (higher = smoother, laggier)
+const smSlider=document.getElementById("smSlider"), smOut=document.getElementById("smOut");
+if(smSlider) smSlider.oninput=()=>{ SMOOTH=1-(+smSlider.value/100); smOut.textContent=smSlider.value+"%"; };
+
+// reset auto-tracked ranges
+document.getElementById("resetBtn").onclick=resetRanges;
+
+// debug toggle
+const dbgToggle=document.getElementById("dbgToggle");
+dbgToggle.onclick=()=>{
+  const on=document.documentElement.classList.toggle("debug");
+  dbgToggle.classList.toggle("on",on);
+  dbgToggle.textContent=on?"Debug: on":"Debug";
+};
+
+// ---------- curate mode: check a card/text to send to Debug or Remove ----------
+const curMap=(()=>{ try{return JSON.parse(localStorage.getItem("flickSimCurate")||"{}");}catch(e){return {};} })();
+const curChecked=new Set();
+function curSave(){ try{localStorage.setItem("flickSimCurate",JSON.stringify(curMap));}catch(e){} }
+function curApplyState(){
+  document.querySelectorAll("[data-cid]").forEach(el=>el.classList.remove("cur-debug","cur-removed"));
+  for(const cid in curMap){
+    const el=document.querySelector(`[data-cid="${cid}"]`); if(!el) continue;
+    if(curMap[cid]==="debug") el.classList.add("cur-debug");
+    if(curMap[cid]==="removed") el.classList.add("cur-removed");
+  }
+}
+function curInit(){
+  const sels=[".card",".card > h2",".card .hint",".card .hint-inline",".card > p",".card label",".card .stat"];
+  let n=0; const seen=new Set();
+  sels.forEach(sel=>document.querySelectorAll(sel).forEach(el=>{
+    if(el.closest("#fxControls")||seen.has(el)) return; seen.add(el);
+    if(!el.dataset.cid) el.dataset.cid="c"+(n++);
+    if(!el.querySelector(":scope > .cur-cb")){
+      const cb=document.createElement("span"); cb.className="cur-cb";
+      cb.addEventListener("click",ev=>{ ev.stopPropagation(); ev.preventDefault();
+        const cid=el.dataset.cid;
+        if(curChecked.has(cid)){ curChecked.delete(cid); cb.classList.remove("on"); }
+        else { curChecked.add(cid); cb.classList.add("on"); }
+      });
+      el.appendChild(cb);
+    }
+  }));
+  curApplyState();
+}
+function curAct(state){
+  if(!curChecked.size) return;
+  curChecked.forEach(cid=>{ if(state==="reset") delete curMap[cid]; else curMap[cid]=state; });
+  curSave(); curApplyState();
+  curChecked.clear();
+  document.querySelectorAll(".cur-cb.on").forEach(c=>c.classList.remove("on"));
+}
+// "Edit layout" (curate) feature removed per request.
+
+// init empty displays
+setLive(0,"make a chord");
+</script>
+</body>
+</html>
