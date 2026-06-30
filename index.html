@@ -303,6 +303,7 @@ function minSpan(){ return activeMetric().minSpan; }
 const cal = { raw:{}, dir:{} };
 const rng = {};                               // rng[f] = {lo,hi} seen raw values
 for (const f of FINGERS){ cal.raw[f]=null; cal.dir[f]=activeMetric().biggerClosed?+1:-1; rng[f]={lo:null,hi:null}; }
+let haveOpen=false, haveFist=false;
 let lastHandSize=null;
 // baked DEFAULT calibration (from Muhammed's export) — detection works on Start without recalibrating
 const DEFAULT_CALIB={ metric:"tipY", handSize:{palmWidth:0.1326,handLength:0.29}, fingers:{
@@ -316,7 +317,6 @@ function applyCalib(c){ if(!c||!c.fingers) return;
     rng[f]={lo:d.lo,hi:d.hi}; if(d.threshold!=null) cal.raw[f]=d.threshold; if(d.dir!=null) cal.dir[f]=d.dir; }
   haveOpen=true; haveFist=true; if(c.handSize) lastHandSize=c.handSize; }
 applyCalib(DEFAULT_CALIB);
-let haveOpen=false, haveFist=false;
 function updateRange(lms,f){                    // auto-track seen min/max of the ACTIVE metric
   const v=rawMetric(lms,f); const r=rng[f];
   r.lo=(r.lo==null)?v:Math.min(r.lo,v);
